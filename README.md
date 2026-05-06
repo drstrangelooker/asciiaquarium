@@ -2,6 +2,8 @@
 
 A terminal-based ASCII aquarium animation written in Go.
 
+![Sample](./asciiaquarium.gif)
+
 ## Features
 - Live animation of fish, bubbles, and plants.
 - Color support (Green plants, Blue bubbles, Random colored fish).

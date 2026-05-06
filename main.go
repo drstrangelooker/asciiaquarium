@@ -5,8 +5,10 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -44,12 +46,38 @@ func getTerminalSize() (int, int) {
 	return rows, cols
 }
 
+func generatePlant(height int) Sprite {
+	lines := make([]string, height)
+	patterns := []string{
+		"  \\|/",
+		" \\|/|",
+		" |\\|/",
+		" \\|/|",
+	}
+	for i := 0; i < height; i++ {
+		lines[i] = patterns[i%len(patterns)]
+	}
+	return Sprite{Lines: lines, Width: 5, Height: height}
+}
+
 func main() {
 	rows, cols := getTerminalSize()
 
 	// Hide cursor
 	fmt.Print("\033[?25l")
-	defer fmt.Print("\033[?25h") // Show cursor on exit
+
+	// Handle Ctrl+C
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigs
+		// Restore terminal state
+		fmt.Print("\033[?25h") // Show cursor
+		r, _ := getTerminalSize()
+		fmt.Printf("\033[%d;1H\n", r) // Move to bottom
+		os.Exit(0)
+	}()
 
 	// Clear screen
 	fmt.Print("\033[2J")
@@ -81,20 +109,31 @@ func main() {
 	largeFishRight := Sprite{Lines: []string{"><()))'>"}, Width: 8, Height: 1}
 	largeFishLeft := Sprite{Lines: []string{"<'()))><"}, Width: 8, Height: 1}
 	bubble := Sprite{Lines: []string{"o"}, Width: 1, Height: 1}
-	plant := Sprite{Lines: []string{
-		"  \\|/",
-		" \\|/|",
-		" |\\|/",
-		" \\|/|",
-	}, Width: 5, Height: 4}
+	crab := Sprite{Lines: []string{"(/)o,,o(/)"}, Width: 10, Height: 1}
+
+	minHeight := rows / 3
+	maxHeight := rows / 2
+	if minHeight < 1 {
+		minHeight = 1
+	}
+	if maxHeight <= minHeight {
+		maxHeight = minHeight + 1
+	}
+
+	plant1Height := minHeight + rand.Intn(maxHeight-minHeight+1)
+	plant2Height := minHeight + rand.Intn(maxHeight-minHeight+1)
+
+	plant1 := generatePlant(plant1Height)
+	plant2 := generatePlant(plant2Height)
 
 	entities := []*Entity{
 		{Sprite: &fishRight, X: 1, Y: 10, DX: 1, DY: 0, Color: randFishColor()},
 		{Sprite: &fishLeft, X: cols - 4, Y: 15, DX: -1, DY: 0, Color: randFishColor()},
 		{Sprite: &largeFishRight, X: 10, Y: 5, DX: 1, DY: 0, Color: randFishColor()},
 		{Sprite: &largeFishLeft, X: cols - 10, Y: 8, DX: -1, DY: 0, Color: randFishColor()},
-		{Sprite: &plant, X: 5, Y: rows - 4, DX: 0, DY: 0, Color: Green},
-		{Sprite: &plant, X: cols - 10, Y: rows - 4, DX: 0, DY: 0, Color: Green},
+		{Sprite: &plant1, X: 5, Y: rows - plant1Height, DX: 0, DY: 0, Color: Green},
+		{Sprite: &plant2, X: cols - 10, Y: rows - plant2Height, DX: 0, DY: 0, Color: Green},
+		{Sprite: &crab, X: cols / 2, Y: rows - 1, DX: 1, DY: 0, Color: Red},
 	}
 
 	// Create frame buffer
@@ -126,11 +165,17 @@ func main() {
 		// Update and draw entities
 		var newEntities []*Entity
 		for _, e := range entities {
-			e.X += e.DX
-			e.Y += e.DY
-
-			// Fish logic
+			// Movement logic based on sprite
 			if e.Sprite == &fishLeft || e.Sprite == &fishRight || e.Sprite == &largeFishLeft || e.Sprite == &largeFishRight {
+				e.X += e.DX
+
+				// Randomly change vertical direction
+				if rand.Float64() < 0.05 {
+					e.DY = rand.Intn(3) - 1 // -1, 0, or 1
+				}
+				e.Y += e.DY
+
+				// Horizontal bounce
 				if e.X < 0 || e.X > cols-e.Sprite.Width {
 					e.DX = -e.DX
 					e.X += e.DX * 2
@@ -148,6 +193,29 @@ func main() {
 						}
 					}
 				}
+
+				// Vertical boundaries
+				minY := 2
+				maxY := rows - 6
+				if e.Y < minY {
+					e.Y = minY
+					e.DY = 0
+				}
+				if e.Y > maxY {
+					e.Y = maxY
+					e.DY = 0
+				}
+			} else if e.Sprite == &crab {
+				e.X += e.DX
+				// Horizontal bounce for crab
+				if e.X < 0 || e.X > cols-e.Sprite.Width {
+					e.DX = -e.DX
+					e.X += e.DX * 2
+				}
+			} else {
+				// Bubble and Plant logic
+				e.X += e.DX
+				e.Y += e.DY
 			}
 
 			// Bubble logic
