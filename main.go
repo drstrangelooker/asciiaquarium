@@ -110,6 +110,13 @@ func main() {
 	largeFishLeft := Sprite{Lines: []string{"<'()))><"}, Width: 8, Height: 1}
 	bubble := Sprite{Lines: []string{"o"}, Width: 1, Height: 1}
 	crab := Sprite{Lines: []string{"(/)o,,o(/)"}, Width: 10, Height: 1}
+	cowLeft := Sprite{Lines: []string{
+		" ^__^             ",
+		" (oo)\\_______     ",
+		" (__)\\       )\\/\\",
+		"     ||----w |    ",
+		"     ||     ||    ",
+	}, Width: 18, Height: 5}
 
 	minHeight := rows / 3
 	maxHeight := rows / 2
@@ -162,6 +169,18 @@ func main() {
 			})
 		}
 
+		// Spawn cow randomly (rarely)
+		if rand.Float64() < 1.0/600.0 { // ~Once per minute on average
+			entities = append(entities, &Entity{
+				Sprite: &cowLeft,
+				X:      cols,
+				Y:      rand.Intn(rows - 10), // Avoid bottom part
+				DX:     -1,
+				DY:     0,
+				Color:  Reset,
+			})
+		}
+
 		// Update and draw entities
 		var newEntities []*Entity
 		for _, e := range entities {
@@ -211,6 +230,11 @@ func main() {
 				if e.X < 0 || e.X > cols-e.Sprite.Width {
 					e.DX = -e.DX
 					e.X += e.DX * 2
+				}
+			} else if e.Sprite == &cowLeft {
+				e.X += e.DX
+				if e.X < -e.Sprite.Width {
+					continue // Remove cow that went off screen
 				}
 			} else {
 				// Bubble and Plant logic
